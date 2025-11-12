@@ -4,20 +4,11 @@ import axios from "axios";
 import { Chart, registerables } from "chart.js";
 import "chartjs-adapter-date-fns";
 
-// ลงทะเบียน Chart.js
+// (โค้ดส่วนนี้เหมือนเดิม)
 Chart.register(...registerables);
-
-// ▼▼▼ วาง URL ของ WEB APP ที่คุณคัดลอกมา ▼▼▼
 const GAS_API_URL =
-  "https://script.google.com/macros/s/AKfycbyekoFa8n_O51O_2p1kG3i0e_ZMq8P9uVy7Cxk-fVSUfe3szG5KDMw52XtQAgEpUCET1g/exec";
-
-// ตั้งค่า Interval
-const REFRESH_INTERVAL = 60 * 1000; // 1 นาที
-
-//================================================
-// Helper Functions (แปลงมาจาก JS เก่า)
-//================================================
-
+  "https://script.google.com/macros/s/AKfycbyekoFa8n_O51O_2p1kG3i0e_ZMq8P9uVy7Cxk-fVSUfe3szG5KDMw52XtQAgEpUCET1g/exec"; // <-- ใส่ URL ของคุณ
+const REFRESH_INTERVAL = 60 * 1000;
 function toSafeId(plant) {
   const uniqueString = `${plant.model || ""}-${plant.customer || ""}-${
     plant.province || ""
@@ -28,7 +19,6 @@ function toSafeId(plant) {
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 }
-
 function formatDateTime(isoString) {
   if (!isoString) return "N/A";
   try {
@@ -43,7 +33,6 @@ function formatDateTime(isoString) {
     return "Invalid Date";
   }
 }
-
 function inferUnitFromKey(keyName) {
   if (!keyName) return "";
   const k = String(keyName).toLowerCase();
@@ -58,19 +47,14 @@ function inferUnitFromKey(keyName) {
   if (k.includes("ppm")) return "ppm";
   return "";
 }
-
-// ▼▼▼ แก้ไข 1/3: เพิ่ม "投入・灰出" เข้าไปใน logic การแสดงสถานะ ▼▼▼
 function getStatusIndicator(status) {
   if (!status) return <span className="text-gray-500">-</span>;
-
-  // เพิ่ม "投入・灰出" (สีเหลือง)
   const colorMap = {
     AUTO: "bg-green-500",
     "投入・灰出": "bg-yellow-500",
     冷却: "bg-blue-500",
   };
-
-  const colorClass = colorMap[status] || "bg-gray-400"; // ถ้าสถานะไม่รู้จัก ให้เป็นสีเทา
+  const colorClass = colorMap[status] || "bg-gray-400";
   return (
     <div className="flex items-center text-sm">
       <span className={`h-2.5 w-2.5 rounded-full ${colorClass} mr-2`}></span>
@@ -78,7 +62,6 @@ function getStatusIndicator(status) {
     </div>
   );
 }
-// ▲▲▲ สิ้นสุดการแก้ไข 1/3 ▲▲▲
 
 //================================================
 // React Components
@@ -86,26 +69,19 @@ function getStatusIndicator(status) {
 
 /**
  * Component: กราฟย่อย (Mini Chart)
+ * ▼▼▼ อัปเกรดแล้ว: รับ historyData จาก props และหยุดยิง API ▼▼▼
  */
-const MiniChart = React.memo(({ plant }) => {
+const MiniChart = React.memo(({ historyData, modelName }) => {
   const canvasRef = useRef(null);
   const chartRef = useRef(null);
-  const safeId = toSafeId(plant);
 
   useEffect(() => {
-    const renderChart = async () => {
-      if (!canvasRef.current) return;
+    const renderChart = () => {
+      if (!canvasRef.current || !historyData) return;
       const ctx = canvasRef.current.getContext("2d");
 
       try {
-        const response = await axios.get(GAS_API_URL, {
-          params: {
-            endpoint: "history",
-            model: plant.model,
-            range_hours: 6,
-          },
-        });
-        const historyData = response.data;
+        // (ไม่ต้องยิง axios.get แล้ว!)
 
         let colorIndex = 0;
         const axisUnit = { y_temp: "", y_valve: "" };
@@ -117,7 +93,13 @@ const MiniChart = React.memo(({ plant }) => {
             const yAxisID = isTemp ? "y_temp" : "y_valve";
             const unit = inferUnitFromKey(fieldName);
             if (!axisUnit[yAxisID] && unit) axisUnit[yAxisID] = unit;
-            const data = records.map((r) => ({ x: r.time, y: r.value }));
+
+            // ข้อมูลถูกส่งมาแล้ว (อาจจะยังไม่เรียง) ต้องเรียงก่อน
+            const sortedRecords = records.sort(
+              (a, b) => new Date(a.time) - new Date(b.time)
+            );
+            const data = sortedRecords.map((r) => ({ x: r.time, y: r.value }));
+
             const color = ["#ef4444", "#3b82f6", "#f97316", "#8b5cf6"][
               colorIndex % 4
             ];
@@ -175,7 +157,7 @@ const MiniChart = React.memo(({ plant }) => {
           },
         });
       } catch (error) {
-        console.error(`Error rendering chart for ${plant.model}:`, error);
+        console.error(`Error rendering chart for ${modelName}:`, error);
         if (ctx && canvasRef.current) {
           ctx.clearRect(
             0,
@@ -197,33 +179,31 @@ const MiniChart = React.memo(({ plant }) => {
 
     renderChart();
 
+    // Cleanup
     return () => {
       if (chartRef.current) {
         chartRef.current.destroy();
       }
     };
-  }, [plant]);
+  }, [historyData, modelName]); // Re-render if data changes
 
   return (
     <div className="relative w-full flex-grow" style={{ height: "260px" }}>
-      <canvas
-        ref={canvasRef}
-        id={`chart-${safeId}`}
-        className="w-full h-full"
-      ></canvas>
+      <canvas ref={canvasRef} className="w-full h-full"></canvas>
     </div>
   );
 });
+/* ▲▲▲ สิ้นสุดการอัปเกรด MiniChart ▲▲▲ */
 
 /**
  * Component: การ์ดเซ็นเซอร์ (Sensor Card)
+ * (โค้ดส่วนนี้เหมือนเดิม)
  */
 const SensorCard = ({ name, data }) => {
   if (!data)
     return (
       <div className="border border-transparent rounded-lg p-2 invisible h-[100px]"></div>
     );
-
   let tempVal, kadoVal, statusVal;
   for (const [k, v] of Object.entries(data)) {
     const val = v;
@@ -237,14 +217,10 @@ const SensorCard = ({ name, data }) => {
       kadoVal = { value: val, unit: inferUnitFromKey(k) };
     if (k.includes("運転状況") || k.includes("status")) statusVal = val;
   }
-
   let effectClass = "",
     bgClass = "bg-gray-50";
   const normalizedName = name || "";
-
-  // (Logic การแสดงผล Glow effect)
   if (normalizedName.includes("乾溜ガス化炉")) {
-    // (เราส่ง 'statusVal' ที่แปลงค่าแล้วเข้ามา)
     if (statusVal === "AUTO") {
       effectClass = "fire-effect";
       bgClass = "bg-red-50";
@@ -252,8 +228,6 @@ const SensorCard = ({ name, data }) => {
       effectClass = "ice-effect";
       bgClass = "bg-blue-50";
     }
-    // ถ้าเป็น 投入・灰出 ก็ให้ใช้ ice-effect (สีฟ้า) เหมือน 冷却 ตามที่คุณระบุ
-    // ถ้าอยากให้เป็นสีอื่น ก็เพิ่ม logic ที่นี่
   } else if (normalizedName.includes("乾溜空気弁")) {
     if (kadoVal && Number(kadoVal.value) > 0) {
       effectClass = "green-effect";
@@ -265,7 +239,6 @@ const SensorCard = ({ name, data }) => {
       bgClass = "bg-red-50";
     }
   }
-
   let dataRows = [];
   if (statusVal !== undefined)
     dataRows.push(
@@ -298,7 +271,6 @@ const SensorCard = ({ name, data }) => {
         </dd>
       </div>
     );
-
   return (
     <div
       className={`${bgClass} border border-gray-200 rounded-lg p-2 ${effectClass} transition-all duration-300 h-[100px]`}
@@ -311,6 +283,7 @@ const SensorCard = ({ name, data }) => {
 
 /**
  * Component: การ์ดแสดงผล Plant (Plant Card)
+ * ▼▼▼ อัปเกรดแล้ว: ส่ง plant.history ให้ MiniChart ▼▼▼
  */
 const PlantCard = React.memo(({ plant }) => {
   const sensors = plant.sensors || {};
@@ -323,16 +296,11 @@ const PlantCard = React.memo(({ plant }) => {
   const combustionFurnace = Object.entries(sensors).find(
     ([name]) => name === "燃焼炉"
   );
-
-  // ▼▼▼ แก้ไข 2/3: ดึงข้อมูล 排ガス濃度 ออกมา ▼▼▼
   const exhaustGasData = sensors["排ガス濃度"] || {};
-  // หา Key ของ CO และ O2 จากข้อมูลที่ดึงมา (เผื่อชื่อ field ไม่ตรงเป๊ะ)
   const coKey = Object.keys(exhaustGasData).find((k) => k.includes("CO"));
   const o2Key = Object.keys(exhaustGasData).find((k) => k.includes("O2"));
   const coValue = coKey ? exhaustGasData[coKey] : undefined;
   const o2Value = o2Key ? exhaustGasData[o2Key] : undefined;
-  // ▲▲▲ สิ้นสุดการแก้ไข 2/3 ▲▲▲
-
   const suffixes = new Set();
   [...Object.keys(gasificationFurnaces), ...Object.keys(airValves)].forEach(
     (name) => {
@@ -341,16 +309,14 @@ const PlantCard = React.memo(({ plant }) => {
     }
   );
   const sortedSuffixes = Array.from(suffixes).sort();
-
   const displayLastUpdatedISO = plant.last_updated || new Date().toISOString();
-
   const imageUrlPng = `${plant.image_url}.png`;
   const imageUrlJpg = `${plant.image_url}.jpg`;
 
   return (
     <div className="bg-white rounded-xl shadow-md p-3 mb-4">
       <div className="grid grid-cols-1 lg:grid-cols-5 gap-4 items-start">
-        {/* Column 1: Info & Image */}
+        {/* Column 1: Info & Image (เหมือนเดิม) */}
         <div className="lg:col-span-1">
           <div className="flex flex-col items-center lg:items-start text-center lg:text-left w-full">
             <img
@@ -377,32 +343,25 @@ const PlantCard = React.memo(({ plant }) => {
           </div>
         </div>
 
-        {/* Column 2-5: Sensors & Chart */}
+        {/* Column 2-5: Sensors & Chart (เหมือนเดิม) */}
         <div className="lg:col-span-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 w-full">
           {/* Col 1: 乾溜ガス化炉 */}
           <div className="space-y-3">
-            {/* ▼▼▼ แก้ไข 3/3: เพิ่ม Logic การแปลงสถานะ ▼▼▼ */}
             {sortedSuffixes.map((suffix) => {
               const gasFurnaceData =
                 gasificationFurnaces[`乾溜ガス化炉${suffix}`];
               if (!gasFurnaceData) return null;
-
-              let currentStatus = gasFurnaceData["運転状況"]; // เช่น "None", "AUTO"
-
+              let currentStatus = gasFurnaceData["運転状況"];
               if (currentStatus === "None") {
                 const airValveData = airValves[`乾溜空気弁${suffix}`];
-
                 const tempKey = Object.keys(gasFurnaceData).find((k) =>
                   k.includes("温度")
                 );
                 const temp = tempKey ? Number(gasFurnaceData[tempKey]) : 0;
-
                 const fanKey = airValveData
                   ? Object.keys(airValveData).find((k) => k.includes("開度"))
                   : null;
                 const fan = fanKey ? Number(airValveData[fanKey]) : 0;
-
-                // Logic ที่คุณต้องการ: ถ้า Temp < 40 และ Fan = 0
                 if (temp < 40 && fan === 0) {
                   currentStatus = "投入・灰出";
                 } else {
@@ -413,13 +372,10 @@ const PlantCard = React.memo(({ plant }) => {
               } else if (currentStatus === "Auto") {
                 currentStatus = "AUTO";
               }
-
-              // สร้าง object data ใหม่เพื่อส่งให้ SensorCard
               const modifiedData = {
                 ...gasFurnaceData,
-                運転状況: currentStatus, // เขียนทับสถานะเดิมด้วยสถานะใหม่
+                運転状況: currentStatus,
               };
-
               return (
                 <SensorCard
                   key={`gas_${suffix}`}
@@ -428,7 +384,6 @@ const PlantCard = React.memo(({ plant }) => {
                 />
               );
             })}
-            {/* ▲▲▲ สิ้นสุดการแก้ไข 3/3 ▲▲▲ */}
           </div>
 
           {/* Col 2: 乾溜空気弁 */}
@@ -450,8 +405,6 @@ const PlantCard = React.memo(({ plant }) => {
                 data={combustionFurnace[1]}
               />
             )}
-
-            {/* ▼▼▼ แก้ไข 2/3 (ต่อ): เพิ่มการแสดงผล 排ガス濃度 ▼▼▼ */}
             {(coValue !== undefined || o2Value !== undefined) && (
               <div className="bg-gray-50 border border-gray-200 rounded-lg p-2">
                 <h3 className="font-bold text-base text-gray-800">
@@ -479,7 +432,6 @@ const PlantCard = React.memo(({ plant }) => {
                 </dl>
               </div>
             )}
-            {/* ▲▲▲ สิ้นสุดการแก้ไข 2/3 (ต่อ) ▲▲▲ */}
           </div>
 
           {/* Col 4: Mini Chart */}
@@ -509,7 +461,10 @@ const PlantCard = React.memo(({ plant }) => {
                 </svg>
               </Link>
             </div>
-            <MiniChart plant={plant} />
+
+            {/* ▼▼▼ อัปเกรดแล้ว: ส่ง plant.history (ที่ดึงมาแล้ว) ไปให้ MiniChart ▼▼▼ */}
+            <MiniChart historyData={plant.history} modelName={plant.model} />
+            {/* ▲▲▲ สิ้นสุดการอัปเกรด ▲▲▲ */}
           </div>
         </div>
       </div>
@@ -519,11 +474,11 @@ const PlantCard = React.memo(({ plant }) => {
 
 /**
  * Component: การ์ด Plant (แบบที่ไม่มี Sensor)
+ * (โค้ดส่วนนี้เหมือนเดิม)
  */
 const OtherPlantCard = React.memo(({ plant }) => {
   const imageUrlPng = `${plant.image_url}.png`;
   const imageUrlJpg = `${plant.image_url}.jpg`;
-
   return (
     <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 text-center transition-shadow duration-200 hover:shadow-lg">
       <img
@@ -550,6 +505,7 @@ const OtherPlantCard = React.memo(({ plant }) => {
 
 //================================================
 // Component หลักของหน้า (Dashboard)
+// (โค้ดส่วนนี้เหมือนเดิม)
 //================================================
 function Dashboard() {
   const [allPlants, setAllPlants] = useState([]);
@@ -562,12 +518,10 @@ function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  // --- Helper: แยกและกรอง Plant ---
   const filterAndSplitPlants = useCallback((plants, query) => {
     const withSensors = [];
     const otherPlants = [];
     const q = (query || "").trim().toLowerCase();
-
     for (const plant of plants) {
       let matches = true;
       if (q) {
@@ -576,9 +530,7 @@ function Dashboard() {
           (plant.customer || "").toLowerCase().includes(q) ||
           (plant.province || "").toLowerCase().includes(q);
       }
-
       if (!matches) continue;
-
       const hasSensors = plant.sensors && Object.keys(plant.sensors).length > 0;
       if (hasSensors) {
         withSensors.push(plant);
@@ -589,14 +541,13 @@ function Dashboard() {
     return { withSensors, otherPlants };
   }, []);
 
-  // --- Data Fetching ---
   const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
+      // ▼▼▼ การยิง API ครั้งเดียวนี้ จะได้ข้อมูลกราฟมาด้วย ▼▼▼
       const response = await axios.get(GAS_API_URL, {
         params: { endpoint: "overview" },
       });
-
       const plants = response.data || [];
       setAllPlants(plants);
       setFilteredPlants(filterAndSplitPlants(plants, searchQuery));
@@ -608,16 +559,13 @@ function Dashboard() {
     }
   }, [filterAndSplitPlants, searchQuery]);
 
-  // --- โหลดครั้งแรก ---
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // --- Auto Refresh ---
   useEffect(() => {
     const refreshData = async () => {
       if (document.hidden) return;
-
       setIsRefreshing(true);
       try {
         const response = await axios.get(GAS_API_URL, {
@@ -633,32 +581,27 @@ function Dashboard() {
         setIsRefreshing(false);
       }
     };
-
     const interval = setInterval(refreshData, REFRESH_INTERVAL);
     return () => clearInterval(interval);
   }, [filterAndSplitPlants, searchQuery]);
 
-  // --- Handlers ---
   const handleSearchChange = (e) => {
     const query = e.target.value;
     setSearchQuery(query);
     setFilteredPlants(filterAndSplitPlants(allPlants, query));
   };
-
   const handleClearSearch = () => {
     setSearchQuery("");
     setFilteredPlants(filterAndSplitPlants(allPlants, ""));
   };
-
   const handleManualRefresh = () => {
     setIsRefreshing(true);
     fetchData().finally(() => setIsRefreshing(false));
   };
 
-  // --- Render Logic ---
   return (
     <div className="bg-gray-100 text-gray-800 min-h-screen flex flex-col">
-      {/* Header */}
+      {/* Header (เหมือนเดิม) */}
       <header className="border-b bg-white shadow-sm sticky top-0 z-10">
         <div className="max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-2 flex items-center justify-between gap-4">
           <a
@@ -690,6 +633,32 @@ function Dashboard() {
                 })}
               </p>
             </div>
+            <a
+              href="https://docs.google.com/spreadsheets/d/1xIwNwQYTFK_psysG0kVI0N07BA2hbZkhAhqZ3_jJc2Y/edit?gid=1586518190#gid=1586518190"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center px-3 py-1.5 rounded-md border border-gray-300 bg-white hover:bg-green-50 text-sm font-medium transition-colors"
+              title="Google Sheet を開く"
+            >
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="mr-2 text-green-700"
+              >
+                <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"></path>
+                <path d="M14 2v4a2 2 0 0 0 2 2h4"></path>
+                <path d="M8 13h8"></path>
+                <path d="M12 9v8"></path>
+              </svg>
+              データシート
+            </a>
             <button
               id="manual-refresh-btn"
               onClick={handleManualRefresh}
@@ -719,7 +688,7 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main Content (เหมือนเดิม) */}
       <main className="flex-grow w-full max-w-screen-2xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
         <div className="flex items-center justify-between gap-4 mb-4">
           <div className="relative">
@@ -743,7 +712,6 @@ function Dashboard() {
             )}
           </div>
         </div>
-
         {isLoading && (
           <div id="loading-state" className="text-center py-20">
             <svg
@@ -771,7 +739,6 @@ function Dashboard() {
             </p>
           </div>
         )}
-
         {!isLoading && (
           <>
             <div id="plants-with-sensors-container">
@@ -779,7 +746,6 @@ function Dashboard() {
                 <PlantCard key={toSafeId(plant)} plant={plant} />
               ))}
             </div>
-
             {filteredPlants.otherPlants.length > 0 && (
               <div
                 id="other-plants-section"
