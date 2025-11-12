@@ -1,0 +1,51 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Keyframes จากเว็บเก่าของคุณ */
+@layer utilities {
+  @keyframes fire-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 8px rgba(239, 68, 68, 0.4),
+        0 0 15px rgba(239, 68, 68, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 12px rgba(239, 68, 68, 0.6),
+        0 0 20px rgba(239, 68, 68, 0.4);
+    }
+  }
+  .fire-effect {
+    animation: fire-glow 2s ease-in-out infinite;
+  }
+
+  @keyframes ice-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 8px rgba(59, 130, 246, 0.4),
+        0 0 15px rgba(59, 130, 246, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 12px rgba(59, 130, 246, 0.6),
+        0 0 20px rgba(59, 130, 246, 0.4);
+    }
+  }
+  .ice-effect {
+    animation: ice-glow 2.5s ease-in-out infinite;
+  }
+
+  @keyframes green-glow {
+    0%,
+    100% {
+      box-shadow: 0 0 8px rgba(34, 197, 94, 0.4),
+        0 0 15px rgba(34, 197, 94, 0.2);
+    }
+    50% {
+      box-shadow: 0 0 12px rgba(34, 197, 94, 0.6),
+        0 0 20px rgba(34, 197, 94, 0.4);
+    }
+  }
+  .green-effect {
+    animation: green-glow 2.5s ease-in-out infinite;
+  }
+}
