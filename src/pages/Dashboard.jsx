@@ -371,6 +371,8 @@ const PlantCard = React.memo(({ plant }) => {
                 currentStatus = "冷却";
               } else if (currentStatus === "Auto") {
                 currentStatus = "AUTO";
+              } else if (currentStatus === "None2") {
+                currentStatus = "投入・灰出";
               }
               const modifiedData = {
                 ...gasFurnaceData,
