@@ -1,3 +1,8 @@
+This is the source code for the Kinsei's plant website. 
+
+It will get the information form the Spreedsheet to display on the website automatically
+
+
 # React + Vite
 
 This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
